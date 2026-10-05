@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    image: maintenance-windows:latest
+    ports:
+      # Host port is configurable: APP_PORT=9090 docker compose up
+      - "${APP_PORT:-8080}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # One-off verification gate: runs on a clean build, waits for the app to
+  # report healthy, executes the test suite and DST-boundary HTTP smoke, and
+  # reports the result via its exit code.
+  #   docker compose build && docker compose run --rm verify
+  verify:
+    image: maintenance-windows:latest
+    build: .
+    command: ["./scripts/verify.sh"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      BASE_URL: "http://app:8000"
+    restart: ""
